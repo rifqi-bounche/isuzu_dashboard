@@ -3,27 +3,10 @@ import pandas as pd
 import urllib.parse
 from openai import OpenAI
 from datetime import datetime, timedelta
+from auth import check_login
 # =========================================================
 # LOGIN
 # =========================================================
-def check_login():
-    if "logged_in" not in st.session_state:
-        st.session_state.logged_in = False
-
-    if not st.session_state.logged_in:
-        st.title("🔐 Login")
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-
-        if st.button("Login"):
-            if (username == st.secrets["credentials"]["username"] and
-                password == st.secrets["credentials"]["password"]):
-                st.session_state.logged_in = True
-                st.rerun()
-            else:
-                st.error("Username atau password salah.")
-        st.stop()
-
 check_login()
 
 # =========================================================
@@ -73,11 +56,13 @@ def build_kpi_table(df_platform):
     grouped = df_platform.groupby("Date_Week", sort=False).agg(
         Total_Impression  = ("Impression", "sum"),
         Total_Interaction = ("Engagement", "sum"),
-    ).reset_index().fillna(0) 
+        Week_dt           = ("Week_dt", "max")
+    ).reset_index().fillna(0)
 
     grouped["ER"]          = (grouped["Total_Interaction"] / grouped["Total_Impression"] * 100).round(2).fillna(0)
     grouped["Achievement"] = (grouped["ER"] / 9 * 100).round(2).fillna(0)
-
+    grouped = grouped.sort_values("Week_dt", ascending=True)
+    
     grouped = grouped.rename(columns={
         "Date_Week":         "Periode",
         "Total_Impression":  "Total Impression",
@@ -86,7 +71,7 @@ def build_kpi_table(df_platform):
 
     grouped["ER"]          = grouped["ER"].apply(lambda x: f"{x:.2f}%")
     grouped["Achievement"] = grouped["Achievement"].apply(lambda x: f"{x:.2f}%")
-
+    grouped = grouped.drop(columns=["Week_dt"])
     return grouped.set_index("Periode")
 # =========================================================
 # FILTER PER PLATFORM & DISPLAY

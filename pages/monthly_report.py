@@ -6,10 +6,9 @@ import requests
 import json
 import os
 
-# Guard: redirect ke login kalau belum login
-if not st.session_state.get("logged_in", False):
-    st.warning("Please login first.")
-    st.stop()
+from auth import check_login
+check_login()
+
 
 # =========================================================
 # LOAD GOOGLE SHEET
@@ -54,10 +53,14 @@ with col1:
 with col2:
     end_date = st.date_input("End Date", value=today)
 
+selected_start = pd.to_datetime(start_date)
+selected_end = pd.to_datetime(end_date) + pd.Timedelta(days=1)
+
 df_filtered = df[
-    (df["date_valid"] >= pd.to_datetime(start_date)) &
-    (df["date_valid"] <= pd.to_datetime(end_date))
+    (df["date_valid"] >= selected_start) &
+    (df["date_valid"] < selected_end)
 ]
+
 # =========================================================
 # SHARED HELPER FUNCTIONS
 # =========================================================
@@ -141,7 +144,8 @@ def build_content_breakdown(df_full, platform_name):
     if is_instagram:
         column_config["Save"] = st.column_config.NumberColumn("Save", width="small", format="%d")
 
-    st.dataframe(df, use_container_width=True, column_config=column_config)
+    st.dataframe(df, use_container_width=True, column_config=column_config,
+    hide_index=True)
 
 def render_post_embed(post_url):
     try:
