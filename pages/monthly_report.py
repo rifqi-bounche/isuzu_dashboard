@@ -144,6 +144,7 @@ def build_monthly_table(df_full, platform_name):
             New_Followers = ("new_followers", "sum"),
             Impression    = ("account_impression", "sum"),
             Engagement    = ("account_interaction", "sum"),
+            Interaction   = ("account_interaction", "sum"),
         ).reset_index()
 
     else:
@@ -156,7 +157,7 @@ def build_monthly_table(df_full, platform_name):
     merged["Month_dt"] = pd.to_datetime(merged["Month"], format="%b-%Y", errors="coerce")
     merged = merged.sort_values("Month_dt").drop(columns=["Month_dt"])
 
-    for col in ["Post_Amount", "Reach", "Impression", "Engagement"]:
+    for col in ["Post_Amount", "Reach", "Impression", "Engagement", "Interaction"]:
         if col in merged.columns:
             merged[col] = merged[col].fillna(0)
 
@@ -175,7 +176,7 @@ def build_monthly_table(df_full, platform_name):
         fmt_cols += ["New_Followers", "Profile_Views"]
 
     elif p == "youtube":
-        fmt_cols += ["New_Followers"]
+        fmt_cols += ["New_Followers", "Interaction"]
 
     for col in fmt_cols:
         if col in merged.columns:
@@ -189,7 +190,8 @@ def build_monthly_table(df_full, platform_name):
 
     merged = merged.rename(columns={
         "Post_Amount":   "Post Amount",
-        "New_Followers": "New Followers",
+        "New_Followers": "New Subs" if p == "youtube" else "New Followers",
+        "Interaction":   "Total Interaction",
 
         "Impression": (
             "Impressions" if p == "instagram"
@@ -211,15 +213,15 @@ def build_monthly_table(df_full, platform_name):
         "instagram": ["Month", "Post Amount", "Followers", "New Followers", "Reach", "Impressions", "Engagements", "ER%"],
         "facebook":  ["Month", "Post Amount", "Followers", "New Followers", "Views", "Engagements", "ER%"],
         "tiktok":    ["Month", "Post Amount", "Followers", "New Followers", "Post Views", "Profile Views", "Engagements", "ER%"],
-        "youtube": ["Month","Post Amount","Subs","Total Views","Avg. Percentage Views","Avg. Views Duration","ER%",
-],}
+        "youtube":   ["Month", "Post Amount", "Subs", "New Subs", "Total Views", "Total Interaction", "Avg. Percentage Views", "Avg. Views Duration", "ER%"],
+    }
+
     if p in col_order:
         cols = [c for c in col_order[p] if c in merged.columns]
         return merged[cols].set_index("Month")
 
     merged = merged.rename(columns={"Post_Amount": "Post Amount"})
     return merged.set_index("Month")
-
 
 def build_content_breakdown(df_full, platform_name):
     df_p     = df_full[df_full["Platform"].str.strip().str.lower() == platform_name.lower()]
