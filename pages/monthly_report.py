@@ -25,7 +25,9 @@ try:
 
     for col in ["common_post_impressions", "common_post_reach", "common_likes_count",
                 "common_comments_count", "common_shares_count", "profile_post_saved_total",
-                "common_interactions_count", "Growth", "Impression", "Engagement"]:
+                "common_interactions_count", "Growth", "Impression", "Engagement",
+                "account_impression", "account_interaction", "account_reach",
+                "new_followers", "page_views", "Avg View Percentage", "Avg View Time"]:
         if col in df.columns:
             df[col] = (
                 df[col]
@@ -34,7 +36,6 @@ try:
                 .str.extract(r"(-?\d+)", expand=False)
             )
             df[col] = pd.to_numeric(df[col], errors="coerce")
-
 except Exception as e:
     st.error(f"Gagal load spreadsheet: {e}")
     st.stop()
@@ -43,7 +44,7 @@ except Exception as e:
 # DATE FILTER
 # =========================================================
 
-today        = datetime.today()
+today= datetime.today()
 
 df["date_valid"] = pd.to_datetime(df["date_valid"], errors="coerce")
 
@@ -65,35 +66,156 @@ df_filtered = df[
 # SHARED HELPER FUNCTIONS
 # =========================================================
 def build_monthly_table(df_full, platform_name):
-    df_p = df_full[df_full["Platform"].str.strip().str.lower() == platform_name.lower()]
+    p    = platform_name.lower()
+    df_p = df_full[df_full["Platform"].str.strip().str.lower() == p]
 
     df_posts     = df_p[df_p["id"].notna() & (df_p["id"].astype(str).str.strip() != "")]
-    df_followers = df_p[df_p["id"].isna() | (df_p["id"].astype(str).str.strip() == "")]
+    df_followers = df_p[df_p["id"].isna()  | (df_p["id"].astype(str).str.strip() == "")]
 
-    posts_grouped = df_posts.groupby("Month", sort=False).agg(
-        Post_Amount = ("id", "count"),
-        Reach       = ("Reach", "sum"),
-        Impression  = ("Impression", "sum"),
-        Engagement  = ("Engagement", "sum"),
-    ).reset_index()
+    # =====================================================
+    # POSTS GROUPED
+    # =====================================================
+    if p == "instagram":
+        posts_grouped = df_posts.groupby("Month", sort=False).agg(
+            Post_Amount = ("id", "count"),
+        ).reset_index()
 
-    followers_grouped = df_followers.groupby("Month", sort=False).agg(
-        Followers = ("Last Followers", "last"),
-        Growth    = ("Growth", "sum"),
-    ).reset_index()
+    elif p == "facebook":
+        posts_grouped = df_posts.groupby("Month", sort=False).agg(
+            Post_Amount = ("id", "count"),
+        ).reset_index()
+
+    elif p == "tiktok":
+        posts_grouped = df_posts.groupby("Month", sort=False).agg(
+            Post_Amount = ("id", "count"),
+        ).reset_index()
+
+    elif p == "youtube":
+        posts_grouped = df_posts.groupby("Month", sort=False).agg(
+            Post_Amount  = ("id", "count"),
+            Avg_View_Pct = ("Avg View Percentage", "mean"),
+            Avg_View_Dur = ("Avg View Time", "mean"),
+        ).reset_index()
+
+    else:
+        posts_grouped = df_posts.groupby("Month", sort=False).agg(
+            Post_Amount = ("id", "count"),
+            Reach       = ("Reach", "sum"),
+            Impression  = ("Impression", "sum"),
+            Engagement  = ("Engagement", "sum"),
+        ).reset_index()
+
+    # =====================================================
+    # FOLLOWERS GROUPED
+    # =====================================================
+    if p == "instagram":
+        followers_grouped = df_followers.groupby("Month", sort=False).agg(
+            Followers     = ("Last Followers", "last"),
+            Growth        = ("Growth", "sum"),
+            New_Followers = ("new_followers", "sum"),
+            Reach         = ("account_reach", "sum"),
+            Impression    = ("account_impression", "sum"),
+            Engagement    = ("account_interaction", "sum"),
+        ).reset_index()
+
+    elif p == "facebook":
+        followers_grouped = df_followers.groupby("Month", sort=False).agg(
+            Followers     = ("Last Followers", "last"),
+            Growth        = ("Growth", "sum"),
+            New_Followers = ("new_followers", "sum"),
+            Impression    = ("account_impression", "sum"),
+            Engagement    = ("account_interaction", "sum"),
+        ).reset_index()
+
+    elif p == "tiktok":
+        followers_grouped = df_followers.groupby("Month", sort=False).agg(
+            Followers     = ("Last Followers", "last"),
+            Growth        = ("Growth", "sum"),
+            New_Followers = ("new_followers", "sum"),
+            Profile_Views = ("page_views", "sum"),
+            Impression    = ("account_impression", "sum"),
+            Engagement    = ("account_interaction", "sum"),
+        ).reset_index()
+
+    elif p == "youtube":
+        followers_grouped = df_followers.groupby("Month", sort=False).agg(
+            Followers     = ("Last Followers", "last"),
+            Growth        = ("Growth", "sum"),
+            New_Followers = ("new_followers", "sum"),
+            Impression    = ("account_impression", "sum"),
+            Engagement    = ("account_interaction", "sum"),
+        ).reset_index()
+
+    else:
+        followers_grouped = df_followers.groupby("Month", sort=False).agg(
+            Followers = ("Last Followers", "last"),
+            Growth    = ("Growth", "sum"),
+        ).reset_index()
 
     merged = pd.merge(posts_grouped, followers_grouped, on="Month", how="outer")
     merged["Month_dt"] = pd.to_datetime(merged["Month"], format="%b-%Y", errors="coerce")
     merged = merged.sort_values("Month_dt").drop(columns=["Month_dt"])
 
     for col in ["Post_Amount", "Reach", "Impression", "Engagement"]:
-        merged[col] = merged[col].fillna(0)
+        if col in merged.columns:
+            merged[col] = merged[col].fillna(0)
 
     merged["ER"] = (merged["Engagement"] / merged["Impression"] * 100).round(2)
     merged["ER"] = merged["ER"].fillna(0).apply(lambda x: f"{x:.2f}%")
 
-    for col in ["Post_Amount", "Followers", "Growth", "Reach", "Impression", "Engagement"]:
-        merged[col] = merged[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "0")
+    fmt_cols = ["Post_Amount", "Followers", "Growth", "Impression", "Engagement"]
+
+    if p == "instagram":
+        fmt_cols += ["Reach", "New_Followers"]
+
+    elif p == "facebook":
+        fmt_cols += ["New_Followers"]
+
+    elif p == "tiktok":
+        fmt_cols += ["New_Followers", "Profile_Views"]
+
+    elif p == "youtube":
+        fmt_cols += ["New_Followers"]
+
+    for col in fmt_cols:
+        if col in merged.columns:
+            merged[col] = merged[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "0")
+
+    if p == "youtube":
+        if "Avg_View_Pct" in merged.columns:
+            merged["Avg_View_Pct"] = merged["Avg_View_Pct"].fillna(0).round(2).astype(str) + "%"
+        if "Avg_View_Dur" in merged.columns:
+            merged["Avg_View_Dur"] = merged["Avg_View_Dur"].fillna(0).round(2)
+
+    merged = merged.rename(columns={
+        "Post_Amount":   "Post Amount",
+        "New_Followers": "New Followers",
+
+        "Impression": (
+            "Impressions" if p == "instagram"
+            else "Views" if p == "facebook"
+            else "Post Views" if p == "tiktok"
+            else "Total Views" if p == "youtube"
+            else "Impression"
+        ),
+
+        "Engagement":    "Engagements",
+        "Profile_Views": "Profile Views",
+        "Avg_View_Pct":  "Avg. Percentage Views",
+        "Avg_View_Dur":  "Avg. Views Duration",
+        "Followers":     "Subs" if p == "youtube" else "Followers",
+        "ER":            "ER%",
+    })
+
+    col_order = {
+        "instagram": ["Month", "Post Amount", "Followers", "New Followers", "Reach", "Impressions", "Engagements", "ER%"],
+        "facebook":  ["Month", "Post Amount", "Followers", "New Followers", "Views", "Engagements", "ER%"],
+        "tiktok":    ["Month", "Post Amount", "Followers", "New Followers", "Post Views", "Profile Views", "Engagements", "ER%"],
+        "youtube": ["Month","Post Amount","Subs","Total Views","Avg. Percentage Views","Avg. Views Duration","ER%",
+],}
+    if p in col_order:
+        cols = [c for c in col_order[p] if c in merged.columns]
+        return merged[cols].set_index("Month")
 
     merged = merged.rename(columns={"Post_Amount": "Post Amount"})
     return merged.set_index("Month")
@@ -108,11 +230,14 @@ def build_content_breakdown(df_full, platform_name):
     df_posts["ER"]     = df_posts["ER_raw"].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "0.00%")
 
     is_instagram = platform_name.lower() == "instagram"
+    is_youtube   = platform_name.lower() == "youtube"
 
     cols = ["Date", "link", "type", "Boosted", "message", "Impression", "Reach",
             "Likes", "Comments", "Share", "Save", "Engagement", "ER", "ER_raw"]
     if not is_instagram:
         cols = [c for c in cols if c != "Save"]
+    if is_youtube:
+        cols = [c for c in cols if c not in ["Reach", "Share"]]
     cols = [c for c in cols if c in df_posts.columns]
 
     df_posts = df_posts[cols]
@@ -144,9 +269,7 @@ def build_content_breakdown(df_full, platform_name):
     if is_instagram:
         column_config["Save"] = st.column_config.NumberColumn("Save", width="small", format="%d")
 
-    st.dataframe(df, use_container_width=True, column_config=column_config,
-    hide_index=True)
-
+    st.dataframe(df, use_container_width=True, column_config=column_config, hide_index=True)
 def render_post_embed(post_url):
     try:
         shortcode = [x for x in post_url.split("/") if x][-1]
@@ -365,8 +488,8 @@ st.subheader("Engagement Rate")
 rows_er = []
 for platform_name in ["Instagram", "Facebook", "Tiktok", "Youtube"]:
     df_p              = df_filtered[df_filtered["Platform"].str.strip().str.lower() == platform_name.lower()]
-    total_impression  = df_p["Impression"].sum()
-    total_interaction = df_p["Engagement"].sum()
+    total_impression  = df_p["account_impression"].sum()
+    total_interaction = df_p["account_interaction"].sum()
     er                = (total_interaction / total_impression * 100) if total_impression > 0 else 0
     rows_er.append({
         "Platform":          platform_name,
@@ -458,7 +581,7 @@ for platform_name in ["Instagram", "Facebook", "Tiktok", "Youtube"]:
     df_followers     = df_p[df_p["id"].isna() | (df_p["id"].astype(str).str.strip() == "")]
     df_posts         = df_p[df_p["id"].notna() & (df_p["id"].astype(str).str.strip() != "")]
     followers_actual = df_followers["Growth"].sum()
-    views_actual     = df_posts["Impression"].sum()
+    views_actual     = df_followers["account_impression"].sum()  
     kpi_f            = KPI_FOLLOWERS[platform_name]
     kpi_v            = KPI_VIEWS[platform_name]
     rows_fv.append({
